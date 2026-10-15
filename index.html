@@ -197,9 +197,9 @@
       <div class="field">
         <label>出力文字コード</label>
         <div class="radio-group">
-          <label><input type="radio" name="enc" value="utf8bom" checked> UTF-8（BOM付, 推奨）</label>
+          <label><input type="radio" name="enc" value="utf8bom"> UTF-8（BOM付）</label>
           <label><input type="radio" name="enc" value="utf8"> UTF-8</label>
-          <label><input type="radio" name="enc" value="sjis"> Shift_JIS</label>
+          <label><input type="radio" name="enc" value="sjis" checked> Shift_JIS（推奨）</label>
         </div>
       </div>
     </div>
@@ -590,16 +590,18 @@ function makeZip(files) {
 
   for (const {name,data} of files){
     const nb=te.encode(name), crc=crc32(data), sz=u32(data.length);
+    // bit11=0x0800: Language Encoding Flag → WindowsにUTF-8ファイル名であることを通知
+    const FLAG = u16(0x0800);
     const localHdr = cat(
       new Uint8Array([0x50,0x4B,0x03,0x04]),
-      u16(20),u16(0),u16(0),
+      u16(20),FLAG,u16(0),
       u16(dosTime),u16(dosDate),
       u32(crc),sz,sz,
       u16(nb.length),u16(0),nb
     );
     const cenDir = cat(
       new Uint8Array([0x50,0x4B,0x01,0x02]),
-      u16(20),u16(20),u16(0),u16(0),
+      u16(20),u16(20),FLAG,u16(0),
       u16(dosTime),u16(dosDate),
       u32(crc),sz,sz,
       u16(nb.length),u16(0),u16(0),
