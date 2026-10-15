@@ -311,65 +311,46 @@ function encodeCSV(csvStr, enc) {
 }
 
 /* ──────────────── Shift_JIS encoder ─────────────────────────────────────
-   Covers: ASCII, Half-width kana, Hiragana, Katakana, basic symbols.
-   Characters outside coverage are replaced with '?'.
-   For full Japanese support use UTF-8 BOM option.
+   Full CP932 encoder — built dynamically via TextDecoder('shift-jis').
+   Covers ALL JIS X 0208 kanji, kana, symbols. No embedded table needed.
 ───────────────────────────────────────────────────────────────────────── */
-function toShiftJIS(str) {
-  const buf = [];
-  for (let i=0; i<str.length; i++) {
-    const cp = str.charCodeAt(i);
-    if (cp < 0x80) {                          // ASCII
-      buf.push(cp);
-    } else if (cp >= 0xFF61 && cp <= 0xFF9F) { // Half-width katakana
-      buf.push(cp - 0xFF61 + 0xA1);
-    } else {
-      const s = SJIS[cp];
-      if (s !== undefined) {
-        if (s > 0xFF) { buf.push(s>>>8); buf.push(s&0xFF); }
-        else           buf.push(s);
-      } else {
-        buf.push(0x3F); // '?'
-      }
+let _sjisMap = null;
+
+function getSJISMap() {
+  if (_sjisMap) return _sjisMap;
+  const dec = new TextDecoder('shift-jis', {fatal: false});
+  const m = {};
+  // 1-byte half-width kana (0xA1–0xDF)
+  for (let b = 0xA1; b <= 0xDF; b++) {
+    const u = dec.decode(new Uint8Array([b])).codePointAt(0);
+    if (u && u !== 0xFFFD) m[u] = b;
+  }
+  // 2-byte sequences (lead: 0x81–0x9F, 0xE0–0xFC)
+  for (let b1 = 0x81; b1 <= 0xFC; b1++) {
+    if (b1 >= 0xA0 && b1 <= 0xDF) continue;
+    for (let b2 = 0x40; b2 <= 0xFC; b2++) {
+      if (b2 === 0x7F) continue;
+      const u = dec.decode(new Uint8Array([b1, b2])).codePointAt(0);
+      if (u && u !== 0xFFFD && u > 0x7E) m[u] = (b1 << 8) | b2;
     }
+  }
+  return (_sjisMap = m);
+}
+
+function toShiftJIS(str) {
+  const m = getSJISMap();
+  const buf = [];
+  for (let i = 0; i < str.length; i++) {
+    const cp = str.charCodeAt(i);
+    if (cp < 0x80) { buf.push(cp); continue; }
+    const s = m[cp];
+    if (s !== undefined) {
+      if (s > 0xFF) { buf.push(s >>> 8); buf.push(s & 0xFF); }
+      else buf.push(s);
+    } else buf.push(0x3F); // '?' for unmapped
   }
   return new Uint8Array(buf);
 }
-
-/* Sparse Unicode→SJIS lookup table.
-   Hiragana U+3041–U+3096 → SJIS 0x829F–0x82F1
-   Katakana  U+30A1–U+30F6 → SJIS 0x8340–0x8396 (skip 0x837F)
-   Common punctuation & fullwidth chars included. */
-const SJIS = (() => {
-  const m = {};
-  // Hiragana
-  for (let u=0x3041,s=0x829F; u<=0x3096; u++,s++) m[u]=s;
-  // Katakana
-  let s=0x8340;
-  for (let u=0x30A1; u<=0x30F6; u++,s++) { if(s===0x837F)s++; m[u]=s; }
-  // Prolonged sound mark ー
-  m[0x30FC]=0x815B;
-  // Wave dash ～
-  m[0x301C]=0x8160;
-  // En/Em dash
-  m[0x2015]=0x815C; m[0x2014]=0x815D;
-  // Corner brackets
-  m[0x300C]=0x8175; m[0x300D]=0x8176; m[0x300E]=0x8177; m[0x300F]=0x8178;
-  // Japanese comma/period
-  m[0x3001]=0x8141; m[0x3002]=0x8142;
-  // Fullwidth punctuation
-  m[0xFF01]=0x8149; m[0xFF08]=0x8169; m[0xFF09]=0x816A;
-  m[0xFF0C]=0x8143; m[0xFF0E]=0x8144; m[0xFF1A]=0x8146; m[0xFF1B]=0x8147;
-  m[0xFF1F]=0x814A; m[0xFF3B]=0x816D; m[0xFF3D]=0x816E;
-  m[0xFF5B]=0x8179; m[0xFF5D]=0x817A;
-  // Spaces
-  m[0x3000]=0x8140; // Ideographic space
-  // Circled numbers ①–⑳
-  const circ=[0x8740,0x8741,0x8742,0x8743,0x8744,0x8745,0x8746,0x8747,0x8748,0x8749,
-               0x874A,0x874B,0x874C,0x874D,0x874E,0x874F,0x8750,0x8751,0x8752,0x8753];
-  for(let i=0;i<20;i++) m[0x2460+i]=circ[i];
-  return m;
-})();
 
 /* ──────────────── File name sanitise ─────────── */
 function safe(s){ return String(s).replace(/[\\/:*?"<>|\r\n]/g,'_').replace(/\s+/g,'_').slice(0,60)||'unnamed'; }
