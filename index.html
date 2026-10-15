@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <!-- https://jujochemical.sharepoint.com/:u:/s/webapp/IQDLTw-KBehsSJqoGTZSBkkeAbj6DmC_LBbq3HbOYOsHXmI?e=0lhxgx -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CSV 分割ツール</title>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg:         #eef2f7;
+      --surface:    #ffffff;
+      --surface2:   #f7f9fc;
+      --primary:    #2563eb;
+      --primary-h:  #1d4ed8;
+      --accent:     #10b981;
+      --accent-h:   #059669;
+      --danger:     #ef4444;
+      --text:       #1e293b;
+      --muted:      #64748b;
+      --border:     #e2e8f0;
+      --radius:     14px;
+      --shadow:     0 4px 28px rgba(0,0,0,.09);
+      --tr:         .2s ease;
+    }
+    body {
+      font-family: 'Segoe UI','Hiragino Sans','Meiryo',sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      padding: 28px 16px 60px;
+      line-height: 1.65;
+    }
+    .wrapper { max-width: 800px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+
+    /* ── Header ── */
+    .header {
+      background: linear-gradient(135deg,#1d4ed8 0%,#6d28d9 100%);
+      color: #fff; border-radius: var(--radius);
+      padding: 26px 30px; box-shadow: var(--shadow);
+    }
+    .header h1 { font-size: 1.45rem; font-weight: 700; letter-spacing:.02em; margin-bottom:4px; }
+    .header p  { font-size: .875rem; opacity: .82; }
+
+    /* ── Card ── */
+    .card { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 26px 30px; }
+    .step-label {
+      display: inline-block; font-size: .7rem; font-weight: 800;
+      letter-spacing: .1em; text-transform: uppercase; color: var(--primary);
+      background: #dbeafe; border-radius: 6px; padding: 2px 9px; margin-bottom: 14px;
+    }
+    .card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 14px; }
+
+    /* ── Drop Zone ── */
+    #dropZone {
+      border: 2.5px dashed var(--border); border-radius: var(--radius);
+      background: var(--surface2); padding: 44px 20px;
+      text-align: center; cursor: pointer;
+      transition: border-color var(--tr), background var(--tr);
+    }
+    #dropZone.dragover { border-color: var(--primary); background: #eff6ff; }
+    .drop-icon { font-size: 2.8rem; display: block; margin-bottom: 10px; user-select: none; }
+    #dropZone p { color: var(--muted); font-size: .9rem; }
+    #dropZone strong { color: var(--primary); }
+    #fileInput { display: none; }
+
+    /* ── Chip ── */
+    .chip {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #eff6ff; border: 1px solid #bfdbfe;
+      border-radius: 999px; padding: 6px 14px;
+      font-size: .85rem; color: var(--primary); margin-top: 14px;
+    }
+    .chip-remove {
+      background: none; border: none; color: var(--danger);
+      font-size: 1rem; line-height: 1; cursor: pointer; padding: 0;
+    }
+
+    /* ── Controls ── */
+    .controls { display: flex; flex-wrap: wrap; gap: 18px; align-items: flex-end; }
+    .field { display: flex; flex-direction: column; gap: 6px; flex: 1 1 200px; }
+    .field label { font-size: .8rem; font-weight: 700; color: var(--muted); }
+    .field select {
+      padding: 9px 36px 9px 12px; border: 1.5px solid var(--border);
+      border-radius: 8px; font-size: .9rem; color: var(--text);
+      background: var(--surface2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 10px center;
+      appearance: none; transition: border-color var(--tr);
+    }
+    .field select:focus { outline: none; border-color: var(--primary); }
+    .field select:disabled { opacity: .45; cursor: not-allowed; }
+
+    .radio-group { display: flex; gap: 16px; flex-wrap: wrap; }
+    .radio-group label { display: flex; align-items: center; gap: 6px; font-size: .875rem; cursor: pointer; }
+    .radio-group input[type=radio] { accent-color: var(--primary); }
+
+    /* ── Buttons ── */
+    .btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 10px 22px; border: none; border-radius: 8px;
+      font-size: .9rem; font-weight: 700; cursor: pointer;
+      transition: transform var(--tr), box-shadow var(--tr), background var(--tr);
+    }
+    .btn:active:not(:disabled) { transform: scale(.97); }
+    .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 2px 8px rgba(37,99,235,.28); }
+    .btn-primary:hover:not(:disabled) { background: var(--primary-h); box-shadow: 0 4px 16px rgba(37,99,235,.38); }
+    .btn-success { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(16,185,129,.28); }
+    .btn-success:hover:not(:disabled) { background: var(--accent-h); box-shadow: 0 4px 16px rgba(16,185,129,.38); }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+    /* ── Progress ── */
+    .prog-wrap { height: 6px; background: var(--border); border-radius: 999px; overflow: hidden; display: none; margin-top: 16px; }
+    .prog-wrap.on { display: block; }
+    .prog-bar { height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), var(--accent)); border-radius: 999px; transition: width .35s ease; }
+
+    /* ── Results ── */
+    .res-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+    .res-count { font-size: .85rem; color: var(--muted); }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .75rem; font-weight: 700; }
+    .badge-blue  { background: #dbeafe; color: #1d4ed8; }
+    .badge-green { background: #d1fae5; color: #065f46; }
+
+    .tbl-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 10px; max-height: 400px; }
+    table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+    thead th {
+      background: var(--surface2); padding: 10px 14px; text-align: left;
+      font-weight: 700; color: var(--muted); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 1;
+      font-size: .72rem; letter-spacing: .07em; text-transform: uppercase;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f8fafc; }
+    tbody td { padding: 9px 14px; vertical-align: middle; }
+    .dl-btn {
+      padding: 4px 13px; font-size: .8rem; border-radius: 6px;
+      background: #eff6ff; color: var(--primary); border: 1px solid #bfdbfe;
+      cursor: pointer; transition: background var(--tr); white-space: nowrap;
+    }
+    .dl-btn:hover { background: #dbeafe; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 22px; right: 20px;
+      background: #1e293b; color: #fff;
+      padding: 11px 18px; border-radius: 10px; font-size: .875rem;
+      box-shadow: 0 8px 24px rgba(0,0,0,.2);
+      opacity: 0; transform: translateY(8px);
+      transition: opacity .3s, transform .3s;
+      z-index: 9999; max-width: 300px; pointer-events: none;
+    }
+    #toast.show   { opacity: 1; transform: translateY(0); }
+    #toast.err    { background: #991b1b; }
+
+    @media (max-width: 540px) {
+      body { padding: 12px 8px 40px; }
+      .card, .header { padding: 18px 16px; }
+      .controls { flex-direction: column; }
+      .field { flex: 1 1 100%; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- Header -->
+  <header class="header">
+    <h1>📊 CSV 分割ツール</h1>
+    <p>列の値でCSVを自動グループ分割し、ZIP一括ダウンロード。すべての処理はブラウザ内で完結します。</p>
+  </header>
+
+  <!-- Step 1: Upload -->
+  <section class="card" aria-labelledby="s1title">
+    <span class="step-label">Step 1</span>
+    <h2 id="s1title">CSVファイルを選択</h2>
+    <div id="dropZone" role="button" tabindex="0"
+         aria-label="CSVファイルをドロップまたはクリックして選択">
+      <span class="drop-icon">📂</span>
+      <p><strong>クリック</strong>  またはここにファイルを  <strong>ドラッグ＆ドロップ</strong></p>
+      <p style="margin-top:6px;font-size:.8rem;">対応形式: .csv &nbsp;|&nbsp; 自動文字コード判定（UTF-8 / Shift_JIS）</p>
+      <input type="file" id="fileInput" accept=".csv,text/csv" />
+    </div>
+    <div id="chipArea"></div>
+  </section>
+
+  <!-- Step 2: Settings -->
+  <section class="card" id="settingsCard" style="display:none;" aria-labelledby="s2title">
+    <span class="step-label">Step 2</span>
+    <h2 id="s2title">分割オプション</h2>
+    <div class="controls">
+      <div class="field">
+        <label for="colSelect">分割基準の列</label>
+        <select id="colSelect" disabled>
+          <option value="">列を選択してください</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>出力文字コード</label>
+        <div class="radio-group">
+          <label><input type="radio" name="enc" value="utf8bom" checked> UTF-8（BOM付, 推奨）</label>
+          <label><input type="radio" name="enc" value="utf8"> UTF-8</label>
+          <label><input type="radio" name="enc" value="sjis"> Shift_JIS</label>
+        </div>
+      </div>
+    </div>
+    <div style="margin-top:20px;">
+      <button class="btn btn-primary" id="splitBtn" disabled>⚡ 分割を実行</button>
+    </div>
+    <div class="prog-wrap" id="progWrap"><div class="prog-bar" id="progBar"></div></div>
+  </section>
+
+  <!-- Step 3: Results -->
+  <section class="card" id="resultsCard" style="display:none;" aria-labelledby="s3title">
+    <div class="res-header">
+      <div>
+        <span class="step-label">Step 3</span>
+        <h2 id="s3title" style="margin-bottom:2px;">ダウンロード</h2>
+        <div class="res-count" id="resCount"></div>
+      </div>
+      <button class="btn btn-success" id="zipBtn">🗜️ ZIP一括ダウンロード</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ファイル名</th>
+            <th>データ行数</th>
+            <th>個別DL</th>
+          </tr>
+        </thead>
+        <tbody id="resBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ──────────────────── Toast ──────────────────── */
+let _tTimer;
+function toast(msg, isErr = false) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.toggle('err', isErr);
+  el.classList.add('show');
+  clearTimeout(_tTimer);
+  _tTimer = setTimeout(() => el.classList.remove('show'), 3800);
+}
+
+/* ──────────────── Decode buffer ──────────────── */
+function decode(buf) {
+  const b = new Uint8Array(buf);
+  // UTF-8 BOM
+  if (b[0]===0xEF && b[1]===0xBB && b[2]===0xBF) return new TextDecoder('utf-8').decode(buf);
+  // UTF-16 LE BOM
+  if (b[0]===0xFF && b[1]===0xFE) return new TextDecoder('utf-16le').decode(buf);
+  // Try strict UTF-8
+  try { return new TextDecoder('utf-8',{fatal:true}).decode(buf); }
+  catch(_) { return new TextDecoder('shift_jis').decode(buf); }
+}
+
+/* ──────────────── CSV parser ─────────────────── */
+function parseCSV(text) {
+  const rows = [];
+  let col='', row=[], inQ=false;
+  for (let i=0; i<text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c==='"') { if (text[i+1]==='"'){col+='"';i++;} else inQ=false; }
+      else col += c;
+    } else {
+      if      (c==='"')  inQ = true;
+      else if (c===',')  { row.push(col); col=''; }
+      else if (c==='\r') { /* ignore */ }
+      else if (c==='\n') {
+        row.push(col); col='';
+        if (row.some(v=>v!=='')||row.length>1) rows.push(row);
+        row=[];
+      } else col += c;
+    }
+  }
+  row.push(col);
+  if (row.some(v=>v!=='')||row.length>1) rows.push(row);
+  return rows;
+}
+
+/* ──────────────── CSV serialiser ─────────────── */
+function toCSV(rows) {
+  return rows.map(r =>
+    r.map(v => {
+      const s = String(v ?? '');
+      return (s.includes(',')||s.includes('"')||s.includes('\n')||s.includes('\r'))
+        ? '"'+s.replace(/"/g,'""')+'"' : s;
+    }).join(',')
+  ).join('\r\n') + '\r\n';
+}
+
+/* ──────────────── Encode output ──────────────── */
+function encodeCSV(csvStr, enc) {
+  if (enc === 'utf8bom') {
+    const bom  = new Uint8Array([0xEF,0xBB,0xBF]);
+    const body = new TextEncoder().encode(csvStr);
+    const out  = new Uint8Array(bom.length + body.length);
+    out.set(bom); out.set(body, bom.length);
+    return out;
+  }
+  if (enc === 'sjis') return toShiftJIS(csvStr);
+  return new TextEncoder().encode(csvStr);
+}
+
+/* ──────────────── Shift_JIS encoder ─────────────────────────────────────
+   Covers: ASCII, Half-width kana, Hiragana, Katakana, basic symbols.
+   Characters outside coverage are replaced with '?'.
+   For full Japanese support use UTF-8 BOM option.
+───────────────────────────────────────────────────────────────────────── */
+function toShiftJIS(str) {
+  const buf = [];
+  for (let i=0; i<str.length; i++) {
+    const cp = str.charCodeAt(i);
+    if (cp < 0x80) {                          // ASCII
+      buf.push(cp);
+    } else if (cp >= 0xFF61 && cp <= 0xFF9F) { // Half-width katakana
+      buf.push(cp - 0xFF61 + 0xA1);
+    } else {
+      const s = SJIS[cp];
+      if (s !== undefined) {
+        if (s > 0xFF) { buf.push(s>>>8); buf.push(s&0xFF); }
+        else           buf.push(s);
+      } else {
+        buf.push(0x3F); // '?'
+      }
+    }
+  }
+  return new Uint8Array(buf);
+}
+
+/* Sparse Unicode→SJIS lookup table.
+   Hiragana U+3041–U+3096 → SJIS 0x829F–0x82F1
+   Katakana  U+30A1–U+30F6 → SJIS 0x8340–0x8396 (skip 0x837F)
+   Common punctuation & fullwidth chars included. */
+const SJIS = (() => {
+  const m = {};
+  // Hiragana
+  for (let u=0x3041,s=0x829F; u<=0x3096; u++,s++) m[u]=s;
+  // Katakana
+  let s=0x8340;
+  for (let u=0x30A1; u<=0x30F6; u++,s++) { if(s===0x837F)s++; m[u]=s; }
+  // Prolonged sound mark ー
+  m[0x30FC]=0x815B;
+  // Wave dash ～
+  m[0x301C]=0x8160;
+  // En/Em dash
+  m[0x2015]=0x815C; m[0x2014]=0x815D;
+  // Corner brackets
+  m[0x300C]=0x8175; m[0x300D]=0x8176; m[0x300E]=0x8177; m[0x300F]=0x8178;
+  // Japanese comma/period
+  m[0x3001]=0x8141; m[0x3002]=0x8142;
+  // Fullwidth punctuation
+  m[0xFF01]=0x8149; m[0xFF08]=0x8169; m[0xFF09]=0x816A;
+  m[0xFF0C]=0x8143; m[0xFF0E]=0x8144; m[0xFF1A]=0x8146; m[0xFF1B]=0x8147;
+  m[0xFF1F]=0x814A; m[0xFF3B]=0x816D; m[0xFF3D]=0x816E;
+  m[0xFF5B]=0x8179; m[0xFF5D]=0x817A;
+  // Spaces
+  m[0x3000]=0x8140; // Ideographic space
+  // Circled numbers ①–⑳
+  const circ=[0x8740,0x8741,0x8742,0x8743,0x8744,0x8745,0x8746,0x8747,0x8748,0x8749,
+               0x874A,0x874B,0x874C,0x874D,0x874E,0x874F,0x8750,0x8751,0x8752,0x8753];
+  for(let i=0;i<20;i++) m[0x2460+i]=circ[i];
+  return m;
+})();
+
+/* ──────────────── File name sanitise ─────────── */
+function safe(s){ return String(s).replace(/[\\/:*?"<>|\r\n]/g,'_').replace(/\s+/g,'_').slice(0,60)||'unnamed'; }
+
+/* ──────────────── MIME type for blob ─────────── */
+function mime(enc){ return enc==='sjis' ? 'text/csv;charset=shift_jis' : 'text/csv;charset=utf-8'; }
+
+/* ──────────────── Download blob ──────────────── */
+/* SharePoint embed iframes lack allow-downloads → use window.open() fallback */
+const _inIframe = (() => { try { return window.self !== window.top; } catch(_){ return true; } })();
+
+function dlBlob(name, data, mimeType) {
+  const blob = new Blob([data], {type: mimeType});
+  const url  = URL.createObjectURL(blob);
+
+  if (!_inIframe) {
+    /* スタンドアロン: 通常のアンカーDL */
+    const a = Object.assign(document.createElement('a'), {href: url, download: name});
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } else {
+    /* iframe内 (SharePoint等): ポップアップでサンドボックス外にDL */
+    const w = window.open(url, '_blank');
+    if (!w) {
+      /* ポップアップがブロックされた場合のフォールバック */
+      toast('ブラウザのポップアップを許可してください（アドレスバーのアイコンから）', true);
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }
+}
+
+/* ══════════════════════════════════════════════
+   State
+══════════════════════════════════════════════ */
+let rows    = [];  // [headerRow, ...dataRows]
+let results = [];  // [{filename, allRows, enc}]
+
+/* ══════════════════════════════════════════════
+   DOM refs
+══════════════════════════════════════════════ */
+const dropZone    = document.getElementById('dropZone');
+const fileInput   = document.getElementById('fileInput');
+const chipArea    = document.getElementById('chipArea');
+const settCard    = document.getElementById('settingsCard');
+const colSel      = document.getElementById('colSelect');
+const splitBtn    = document.getElementById('splitBtn');
+const progWrap    = document.getElementById('progWrap');
+const progBar     = document.getElementById('progBar');
+const resCard     = document.getElementById('resultsCard');
+const resCount    = document.getElementById('resCount');
+const resBody     = document.getElementById('resBody');
+const zipBtn      = document.getElementById('zipBtn');
+
+/* ══════════════════════════════════════════════
+   File load
+══════════════════════════════════════════════ */
+function loadFile(file) {
+  if (!file) return;
+  if (!/\.csv$/i.test(file.name)) { toast('CSVファイルを選択してください。', true); return; }
+  const rd = new FileReader();
+  rd.onload = e => {
+    try {
+      const text = decode(e.target.result);
+      rows = parseCSV(text);
+      if (rows.length < 2) { toast('データ行がありません。', true); return; }
+      buildColumns(rows[0]);
+      showChip(file.name, rows.length - 1);
+      settCard.style.display = 'block';
+      resCard.style.display  = 'none';
+      results = [];
+      progWrap.classList.remove('on');
+      progBar.style.width = '0%';
+    } catch(err) { toast('読み込み失敗: ' + err.message, true); }
+  };
+  rd.onerror = () => toast('ファイルエラー', true);
+  rd.readAsArrayBuffer(file);
+}
+
+function showChip(name, n) {
+  chipArea.innerHTML = `<div class="chip">
+    📄 ${escHtml(name)} &nbsp;<span class="badge badge-blue">${n.toLocaleString()}行</span>
+    <button class="chip-remove" id="chipRm" title="ファイルを削除" aria-label="ファイルを削除">✕</button>
+  </div>`;
+  document.getElementById('chipRm').onclick = resetAll;
+}
+
+function buildColumns(header) {
+  colSel.innerHTML = '<option value="">列を選択してください</option>';
+  header.forEach((h,i) => {
+    const o = document.createElement('option');
+    o.value = i; o.textContent = h || `列${i+1}`;
+    colSel.appendChild(o);
+  });
+  colSel.disabled  = false;
+  splitBtn.disabled = true;
+}
+
+function resetAll() {
+  rows=[]; results=[];
+  fileInput.value=''; chipArea.innerHTML='';
+  colSel.innerHTML='<option value="">列を選択してください</option>';
+  colSel.disabled=true; splitBtn.disabled=true;
+  settCard.style.display='none'; resCard.style.display='none';
+  progWrap.classList.remove('on'); progBar.style.width='0%';
+}
+
+function escHtml(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ══════════════════════════════════════════════
+   Drop / file input
+══════════════════════════════════════════════ */
+dropZone.addEventListener('click', ()=> fileInput.click());
+dropZone.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' ') fileInput.click(); });
+dropZone.addEventListener('dragover',  e=>{ e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', ()=> dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e=>{ e.preventDefault(); dropZone.classList.remove('dragover'); loadFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', ()=> loadFile(fileInput.files[0]));
+colSel.addEventListener('change', ()=>{ splitBtn.disabled = colSel.value===''; });
+
+/* ══════════════════════════════════════════════
+   Split
+══════════════════════════════════════════════ */
+splitBtn.addEventListener('click', ()=>{
+  const ci  = parseInt(colSel.value, 10);
+  const enc = document.querySelector('input[name="enc"]:checked').value;
+  if (isNaN(ci)) { toast('列を選択してください。', true); return; }
+
+  const header = rows[0];
+  const data   = rows.slice(1);
+  const grpMap = new Map();
+  data.forEach(r => {
+    const k = String(r[ci] ?? '');
+    if (!grpMap.has(k)) grpMap.set(k, []);
+    grpMap.get(k).push(r);
+  });
+
+  if (grpMap.size === 0) { toast('データがありません。', true); return; }
+  if (grpMap.size === 1) toast('その列の値はすべて同一です。分割ファイルは1つになります。');
+
+  const colName = safe(header[ci] || `col${ci}`);
+  results = [];
+  progWrap.classList.add('on');
+  let done = 0;
+  const total = grpMap.size;
+
+  for (const [key, keyRows] of grpMap) {
+    const filename = `${colName}_${safe(key)}.csv`;
+    results.push({ filename, allRows: [header, ...keyRows], enc });
+    done++;
+    progBar.style.width = `${Math.round(done/total*100)}%`;
+  }
+
+  renderTable(results);
+  toast(`✅ ${results.length} ファイルに分割しました。`);
+});
+
+/* ══════════════════════════════════════════════
+   Render result table
+══════════════════════════════════════════════ */
+function renderTable(res) {
+  resBody.innerHTML = '';
+  res.forEach((r,i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="word-break:break-all;">${escHtml(r.filename)}</td>
+      <td><span class="badge badge-green">${(r.allRows.length-1).toLocaleString()}</span></td>
+      <td><button class="dl-btn" data-i="${i}" aria-label="${escHtml(r.filename)}をダウンロード">⬇ DL</button></td>`;
+    resBody.appendChild(tr);
+  });
+
+  resBody.addEventListener('click', e=>{
+    const btn = e.target.closest('.dl-btn');
+    if (!btn) return;
+    const r = results[+btn.dataset.i];
+    const enc = document.querySelector('input[name="enc"]:checked').value;
+    dlBlob(r.filename, encodeCSV(toCSV(r.allRows), enc), mime(enc));
+  }, {once:false});
+
+  const totalRows = res.reduce((s,r)=>s+r.allRows.length-1, 0);
+  resCount.textContent = `${res.length} ファイル・合計 ${totalRows.toLocaleString()} 行`;
+  resCard.style.display = 'block';
+  setTimeout(()=> resCard.scrollIntoView({behavior:'smooth',block:'start'}), 60);
+}
+
+/* ══════════════════════════════════════════════
+   Pure-JS ZIP creator (STORE / no compression)
+   Works without any external library.
+══════════════════════════════════════════════ */
+function makeZip(files) {
+  // files: [{name:string, data:Uint8Array}]
+  const te  = new TextEncoder();
+  const u16 = n => new Uint8Array([n&0xFF,(n>>8)&0xFF]);
+  const u32 = n => new Uint8Array([n&0xFF,(n>>8)&0xFF,(n>>16)&0xFF,(n>>24)&0xFF]);
+
+  function crc32(buf) {
+    let c = 0xFFFFFFFF;
+    for (let i=0; i<buf.length; i++) {
+      c ^= buf[i];
+      for (let k=0; k<8; k++) c = (c>>>1)^(c&1?0xEDB88320:0);
+    }
+    return (c^0xFFFFFFFF)>>>0;
+  }
+
+  function cat(...arrs) {
+    const tot = arrs.reduce((s,a)=>s+a.length,0);
+    const out = new Uint8Array(tot); let p=0;
+    for (const a of arrs){out.set(a,p);p+=a.length;}
+    return out;
+  }
+
+  const locals=[], dirs=[];
+  let off=0;
+  const now=new Date();
+  const dosDate=((now.getFullYear()-1980)<<9)|((now.getMonth()+1)<<5)|now.getDate();
+  const dosTime=(now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1);
+
+  for (const {name,data} of files){
+    const nb=te.encode(name), crc=crc32(data), sz=u32(data.length);
+    const localHdr = cat(
+      new Uint8Array([0x50,0x4B,0x03,0x04]),
+      u16(20),u16(0),u16(0),
+      u16(dosTime),u16(dosDate),
+      u32(crc),sz,sz,
+      u16(nb.length),u16(0),nb
+    );
+    const cenDir = cat(
+      new Uint8Array([0x50,0x4B,0x01,0x02]),
+      u16(20),u16(20),u16(0),u16(0),
+      u16(dosTime),u16(dosDate),
+      u32(crc),sz,sz,
+      u16(nb.length),u16(0),u16(0),
+      u16(0),u16(0),u32(0),u32(off),nb
+    );
+    locals.push(cat(localHdr,data));
+    dirs.push(cenDir);
+    off+=localHdr.length+data.length;
+  }
+
+  const cdData=cat(...dirs);
+  const eocd=cat(
+    new Uint8Array([0x50,0x4B,0x05,0x06]),
+    u16(0),u16(0),
+    u16(files.length),u16(files.length),
+    u32(cdData.length),u32(off),u16(0)
+  );
+  return cat(...locals,cdData,eocd);
+}
+
+/* ══════════════════════════════════════════════
+   ZIP download
+══════════════════════════════════════════════ */
+zipBtn.addEventListener('click', ()=>{
+  if (!results.length) return;
+  zipBtn.disabled=true; zipBtn.textContent='⏳ 生成中…';
+  try {
+    const enc = document.querySelector('input[name="enc"]:checked').value;
+    const files = results.map(r => ({
+      name: r.filename,
+      data: encodeCSV(toCSV(r.allRows), enc)
+    }));
+    const zipData = makeZip(files);
+    const ts = new Date().toISOString().slice(0,10);
+    dlBlob(`csv_split_${ts}.zip`, zipData, 'application/zip');
+    toast('✅ ZIPダウンロードを開始しました。');
+  } catch(err) {
+    toast('ZIP生成に失敗: '+err.message, true);
+  } finally {
+    zipBtn.disabled=false; zipBtn.textContent='🗜️ ZIP一括ダウンロード';
+  }
+});
+</script>
+</body>
+</html>
